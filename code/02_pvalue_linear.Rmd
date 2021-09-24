@@ -1,0 +1,101 @@
+---
+title: "P-Value 2 Linear"
+author: "Nate Breznau"
+date: "9/24/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load('tidyverse',
+               'ggplot2',
+               'ragg',
+               'countrycode',
+               'ggpubr')
+
+options(scipen = 999)
+```
+
+### P-Value 2. Linear Associations
+
+Instead of comparing discrete groups (like high and low income in the previous example [01_pvalue_means.Rmd](.../code/01_pvalue_means.Rmd)), social scientists often want to investigate a linear association. Thinking carefully about income and happiness, these are variables that are most likely continuous. People have scales of income and happiness, at least in theory.
+
+To generate a more continuous measure of happiness we combine two questions on happiness and life satisfaction to form a scale, and we can use the 8-category income measure as a closer approximation of continuous income.
+
+```{r prep, message = F, warning = F}
+# load data
+wvs_pvalue <- read_rds(here::here("data","wvs_pvalue.rds"))
+
+wvs_pvalue <- wvs_pvalue %>%
+  subset(!is.na(income8) & !is.na(happiness) & !is.na(life_sat)) %>%
+  mutate(happy = ifelse(happiness > 0, happiness, NA), # remove missing
+         happy = car::recode(happy, "1=4;2=3;3=2;4=1"),
+         life_sati = ifelse(life_sat > 0, life_sat, NA),
+         happyZ = scale(happy),
+         life_satiZ = scale(life_sati),
+         income8f = ifelse(income8 > 0, income8, NA)) %>%
+  rowwise() %>%
+  mutate(subj_well_being = mean(c(happyZ,life_satiZ), na.rm = T))
+```
+
+Plot Linear Association
+
+Let us again take the example of Germany so that we do not have too many cases in the visualization.
+
+```{r line, message = F, warning = F}
+set.seed(90210)
+jitter <- position_jitter(width = 0.5, height = 0.5)
+
+wvs_pvalue %>%
+  subset(iso3c == "DEU") %>%
+  ggplot(aes(x = income8f, y = subj_well_being)) +
+  geom_point(color = "grey", position = jitter) +
+  geom_smooth(method = "lm") +
+  stat_cor(p.digits = 3, label.y.npc = 0.1, label.x.npc = 0.8) +
+  labs(x = "Income Position", y = "Subjective Well-Being") +
+  theme_classic()
+```
+
+We know that Ethiopia did not have an association between income and happiness, let's test that here with continuous variables. We can plot all results, for each country while we are at it. 
+
+```{r line2, message = F, warning = F}
+set.seed(90210)
+jitter <- position_jitter(width = 0.5, height = 0.5)
+
+
+for (c in unique(wvs_pvalue$iso3c)) {
+  wvs_pvalue_temp <- wvs_pvalue %>%
+    subset(iso3c == c)
+
+  # custom titles for each plot
+  gtitle <- countrycode(c, "iso3c", "country.name", custom_match = c("AND" = "Andorra"))
+  
+  plot_temp <-   ggplot(wvs_pvalue_temp, aes(x = income8f, y = subj_well_being)) +
+    geom_point(color = "grey", position = jitter) +
+    geom_smooth(method = "lm") +
+    stat_cor(p.accuracy = 0.001,
+             label.y = -2.5, label.x = 5) +
+    labs(x = "Income Position", y = "Subjective Well-Being",
+         title = paste0(gtitle, " (", c, ")")) +
+    ylim(c(-3,2)) +
+    xlim(c(1,10)) +
+  theme_classic()
+
+
+agg_png(here::here("results", "linear_p", paste0(c,"_linear.png")), height = 700, width = 500, res = 144)
+print(plot_temp)
+dev.off()
+}
+
+
+
+```
+
+We observe that in Ethiopia that the fitted line between subjective well-being and income position is different from zero.
+
+```{r fplot}
+
+knitr::include_graphics(c(here::here("results", "linear_p", "DEU_linear.png"), here::here("results", "linear_p", "ETH_linear.png")))
+
+```
+

@@ -1,0 +1,204 @@
+---
+title: "P-Value 3 multi-variate linear"
+author: "Nate Breznau"
+date: "9/24/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load('tidyverse',
+               'ggplot2',
+               'ragg',
+               'countrycode',
+               'ggpubr',
+               'jtools')
+
+options(scipen = 999)
+```
+
+### P-Value 3. Linear Associations, Adjusting for Other Variables
+
+Now lets look at linear associations after adjusting for other variables that might explain the *income-happiness association*. For example, maybe people who are higher educated are happier, or people who have strong religious beliefs.
+
+As with the last example ([02_pvalue_linear.Rmd](.../code/02_pvalue_linear.Rmd)) we again generate a more continuous measure of happiness by combining the two questions on happiness and life satisfaction to form a scale, and by using the 8-category income measure as a closer approximation of continuous income.
+
+```{r prep, message = F, warning = F}
+# load data
+wvs_pvalue <- read_rds(here::here("data","wvs_pvalue.rds"))
+
+wvs_pvalue <- wvs_pvalue %>%
+  mutate(happy = ifelse(happiness > 0, happiness, NA), # remove missing
+         happy = car::recode(happy, "1=4;2=3;3=2;4=1"),
+         life_sati = ifelse(life_sat > 0, life_sat, NA),
+         happyZ = scale(happy),
+         life_satiZ = scale(life_sati),
+         income8f = ifelse(income8 > 0, income8, NA),
+         educ_isced11f = ifelse(educ_isced11 >= 0 & educ_isced11 < 9, educ_isced11, NA), # 9 = other
+         god_importancef = ifelse(god_importance > 0, god_importance, NA)) %>%
+  rowwise() %>%
+  mutate(subj_well_being = mean(c(happyZ,life_satiZ), na.rm = T)) %>%
+  subset(!is.na(income8f) & !is.na(happy) & !is.na(life_sati) & !is.na(educ_isced11f) & !is.na(god_importancef)) %>%
+  ungroup()
+```
+
+Multivariate regression is one of the most common quantitative methods used to study social science phenomenon. It comes in many forms, but a basic application is to take a linear association like the one below.
+
+```{r assoc}
+knitr::include_graphics(here::here("results", "linear_p", "DEU_linear.png"))
+```
+
+But then adjust the values of subjective well-being for an association with education (or other variables). First lets simply look at the education and well-being linear association. Note that ISCED is not intended as a linear measure, but will will use it that way for now just for the purposes of example (and we removed 9 for 'other').
+
+```{r edcorr}
+set.seed(90210)
+jitter <- position_jitter(width = 0.5, height = 0.5)
+
+wvs_pvalue %>%
+  subset(iso3c == "DEU") %>%
+  ggplot(aes(x = educ_isced11f, y = subj_well_being)) +
+  geom_point(color = "grey", position = jitter) +
+  geom_smooth(method = "lm") +
+  stat_cor(p.accuracy = 0.001, label.y = -2.6, label.x = 6) +
+  labs(x = "Educational Level", y = "Subjective Well-Being") +
+  theme_classic()
+```
+Let's also look at the association of believing that god is important and SWB.
+
+```{r godcorr}
+set.seed(90210)
+jitter <- position_jitter(width = 0.5, height = 0.5)
+
+wvs_pvalue %>%
+  subset(iso3c == "DEU") %>%
+  ggplot(aes(x = god_importancef, y = subj_well_being)) +
+  geom_point(color = "grey", position = jitter) +
+  geom_smooth(method = "lm") +
+  stat_cor(p.accuracy = 0.001, label.y = -2.6, label.x = 6) +
+  labs(x = "Belief that\nGod is Important", y = "Subjective Well-Being") +
+  theme_classic()
+```
+
+The association is not as strong as with income and subjective well-being. Nonetheless, we first adjust for the education association. There are two basic ways to do this. The first is to create a partial correlation.
+
+Partial correlation
+
+This involves 'removing' the variance in subjective well-being that is explained by education (their common variance) or belief in the importance of god, and the same for income.
+
+This procedure:
+
+1. Compute residuals for x (dependent) ~ z (independent) model
+2. Compute residuals for y (dependent) ~ z (independent) model
+3. Compute correlation between the residuals
+
+rxy_z = cor(lm(X ~ Z)$residuals), lm(Y ~ Z)$residuals))
+
+```{r part_ed}
+
+# first predict subjective well-being, we will simply do it for each country
+mod1 <- lm(subj_well_being ~ educ_isced11f*iso3c + iso3c + educ_isced11f, data = wvs_pvalue)
+mod2 <- lm(subj_well_being ~ god_importancef*iso3c + iso3c + god_importancef, data = wvs_pvalue)
+# same for income
+mod3 <- lm(income8f ~ educ_isced11f*iso3c + iso3c + educ_isced11f, data = wvs_pvalue)
+mod4 <- lm(income8f ~ god_importancef*iso3c + iso3c + god_importancef, data = wvs_pvalue)
+
+# now predict values (calculate residuals)
+wvs_pvalue$subj_i <- predict(mod1, newdata = wvs_pvalue)
+wvs_pvalue$subj_i2 <- predict(mod2, newdata = wvs_pvalue)
+wvs_pvalue$subj_i3 <- predict(mod3, newdata = wvs_pvalue)
+wvs_pvalue$subj_i4 <- predict(mod4, newdata = wvs_pvalue)
+
+wvs_pvalue$subj_partial_ed <- wvs_pvalue$subj_well_being - wvs_pvalue$subj_i
+wvs_pvalue$subj_partial_god <- wvs_pvalue$subj_well_being - wvs_pvalue$subj_i2
+wvs_pvalue$income_partial_ed <- wvs_pvalue$income8f - wvs_pvalue$subj_i3
+wvs_pvalue$income_partial_god <- wvs_pvalue$income8f - wvs_pvalue$subj_i4
+```
+
+Partial Correlation of Income and SWB (adjusting for Education)
+
+The result is the association of income and SWB that cannot be explained by the association of education and SWB. 
+
+```{r incpart}
+set.seed(90210)
+jitter <- position_jitter(width = 0.5, height = 0.5)
+
+wvs_pvalue %>%
+  subset(iso3c == "DEU") %>%
+  ggplot(aes(x = income_partial_ed, y = subj_partial_ed)) +
+  geom_point(color = "grey", position = jitter) +
+  geom_smooth(method = "lm") +
+  stat_cor(p.accuracy = 0.001, label.y = -2.6, label.x = 0) +
+  labs(x = "Income Level\n(Partialled for Education Level)", y = "Subjective Well-Being\n(Partialled for Education Level)") +
+  theme_classic()
+```
+
+
+
+```{r incpart2}
+set.seed(90210)
+jitter <- position_jitter(width = 0.5, height = 0.5)
+
+wvs_pvalue %>%
+  subset(iso3c == "DEU") %>%
+  ggplot(aes(x = income_partial_god, y = subj_partial_god)) +
+  geom_point(color = "grey", position = jitter) +
+  geom_smooth(method = "lm") +
+  stat_cor(p.accuracy = 0.001, label.y = -2.6, label.x = 0) +
+  labs(x = "Income Level\n(Partialled for Belief in Imp. of God)", y = "Subjective Well-Being\n(Partialled for Belief in Imp. of God)") +
+  theme_classic()
+```
+
+Plot for all countries
+
+NOTE: Not yet finised
+
+```{r loopplots}
+set.seed(90210)
+jitter <- position_jitter(width = 0.5, height = 0.5)
+
+
+#for (c in unique(wvs_pvalue$iso3c)) {
+#  wvs_pvalue_temp <- wvs_pvalue %>%
+#    subset(iso3c == c)
+  
+  
+```
+
+The other option is to run a regression. The advantage is that a regression can adjust for many variables at once.
+
+Here are three regressions showing the linear association of income and SWB.
+1. Just income and SWB
+2. Income and SWB adjusting for education
+3. Income and SWB adjusting for education and belief in importance of god
+
+Start with Germany
+```{r regs_deu}
+
+m1 <- lm(subj_well_being ~ income8f, data = subset(wvs_pvalue, iso3c == "DEU"))
+m2 <- lm(subj_well_being ~ income8f + educ_isced11f, data = subset(wvs_pvalue, iso3c == "DEU"))
+m3 <- lm(subj_well_being ~ income8f + educ_isced11f + god_importancef, data = subset(wvs_pvalue, iso3c == "DEU"))
+
+export_summs(m1, m2, m3)
+```
+Now Ethiopia
+
+```{r regs_deth}
+
+m1 <- lm(subj_well_being ~ income8f, data = subset(wvs_pvalue, iso3c == "ETH"))
+m2 <- lm(subj_well_being ~ income8f + educ_isced11f, data = subset(wvs_pvalue, iso3c == "ETH"))
+m3 <- lm(subj_well_being ~ income8f + educ_isced11f + god_importancef, data = subset(wvs_pvalue, iso3c == "ETH"))
+
+export_summs(m1, m2, m3)
+```
+
+Now Vietnam
+
+What do we see here?
+```{r regs_vnm}
+
+m1 <- lm(subj_well_being ~ income8f, data = subset(wvs_pvalue, iso3c == "VNM"))
+m2 <- lm(subj_well_being ~ income8f + educ_isced11f, data = subset(wvs_pvalue, iso3c == "VNM"))
+m3 <- lm(subj_well_being ~ income8f + educ_isced11f + god_importancef, data = subset(wvs_pvalue, iso3c == "VNM"))
+
+export_summs(m1, m2, m3)
+```

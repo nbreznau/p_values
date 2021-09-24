@@ -27,7 +27,8 @@ wvs_pvalue <- readRDS(here::here("prep","WVS_Cross-National_Wave_7_R_v2_0.rds"))
          immigrant = ifelse(Q263 == 2, 1, 0), # shortcut version of coding here (should include NA)
          educ_isced11 = Q275,
          educ_3 = Q275R,
-         income = Q288R) %>%
-  select(iso3c:income)
+         income = Q288R,
+         income8 = Q288) %>%
+  select(iso3c:income8)
 
 write_rds(wvs_pvalue, file = here::here("data","wvs_pvalue.rds"))

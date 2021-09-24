@@ -1,0 +1,134 @@
+---
+title: "P-Values 1"
+author: "Nate Breznau"
+date: "9/24/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load('tidyverse',
+               'ggplot2',
+               'ragg',
+               'countrycode')
+```
+
+
+
+### P-Value 1. Comparing Means
+
+In experimental research - more often psychology and economics, the p-value is often the statistic used to determine if the average outcome in the **treatment** group is different from the **control** group. But this can also be used to determine differences in means between any groups - whether they were part of an experiement or just social groups that exist in a given population. In this case the p-value gives the same information as a t-test.
+
+Let us compare happiness for individuals that are highest in income in thei society with those who are lowest in income to test the hypothesis that *money can buy happiness*. 
+
+##### Load data
+
+These World Values Survey data were imported using the script [WVS_import.R](.../prep/WVS_import.R) found in the "prep" folder of this project. Fourteen variables were selected to keep things simple. 
+
+```{r data, message = F, warning = F}
+wvs_pvalue <- read_rds(here::here("data","wvs_pvalue.rds"))
+```
+
+#### Happiness and Income T-Test (P-Value)
+
+Start with a t-test. This will compare the means in two income groups. Let's look only at Germany If we use the enitre WVS data there are over 70 thousand cases and this will inevitably lead to tiny standard errors. (Switzerland is not in the Wave 7 data unfortunately)
+
+```{r prepp, message = F, warning = F}
+wvs_pvalue <- as.data.frame(wvs_pvalue) %>%
+  mutate(income_lohi = ifelse(income == 1, "Low", ifelse(income == 3, "High", NA)), # only low and high incomes
+         happy = ifelse(happiness > 0, happiness, NA), # remove missing
+         happy = car::recode(happy, "1=4;2=3;3=2;4=1")) # make happiest people with higher scores
+
+# select only Germany (= DEU in iso3c language)
+wvs_pvalueDEU <- wvs_pvalue %>%
+  subset(iso3c == "DEU")
+
+# t-test
+t.test(wvs_pvalueDEU$happy[wvs_pvalueDEU$income == 1], y = wvs_pvalueDEU$happy[wvs_pvalueDEU$income == 3])
+
+```
+#### Visualize Mean Comparison
+
+```{r viz1, message = F, warning = F}
+# reproducible jitter
+set.seed(90210)
+jitter <- position_jitter(width = 0.2, height = 0.5)
+
+# Germany specific
+wvs_pvalueDEU_sum <- wvs_pvalueDEU %>%
+  group_by(income_lohi) %>%
+  summarise(happy_m = mean(happy, na.rm = T),
+            happy_sd = sd(happy, na.rm = T),
+            happy_n = n(),
+            happy = happy_m) %>%
+  mutate(happy_se = happy_sd / sqrt(happy_n)) %>%
+  subset(!is.na(income_lohi))
+
+  ggplot() +
+     geom_point(data = subset(wvs_pvalueDEU, !is.na(income_lohi)),  aes(x = income_lohi, y = happy), color = "grey", position = jitter) +
+     geom_point(data = wvs_pvalueDEU_sum, aes(x = income_lohi, y = happy), size = 2) +
+     geom_errorbar(data = wvs_pvalueDEU_sum, aes(ymin = happy - happy_se, ymax = happy + happy_se, x = income_lohi), width = .1) +
+
+     scale_y_continuous(breaks = c(1,2,3,4), 
+                        labels = c("1" = "Not at all\nhappy",
+                                                     "2" = "Not very\nhappy",
+                                                     "3" = "Quite\nhappy",
+                                                     "4" = "Very\nhappy"),
+                        limits = c(2,4)) +
+     labs(x = "Income Group", y = " ") +
+     theme_classic()
+```
+#### Visualize all countries in WVS
+
+```{r viz2_allcs, message = F, warning = F}
+# summarize by country
+wvs_pvalue_sum <- wvs_pvalue %>%
+  group_by(iso3c, income_lohi) %>%
+  summarise(happy_m = mean(happy, na.rm = T),
+            happy_sd = sd(happy, na.rm = T),
+            happy_n = n(),
+            happy = happy_m) %>%
+  mutate(happy_se = happy_sd / sqrt(happy_n)) %>%
+  subset(!is.na(income_lohi))
+
+```
+
+Loop the visualization by country
+
+```{r loopviz2, messagee = F, warning = F}
+for (c in unique(wvs_pvalue_sum$iso3c)) {
+  wvs_pvalue_sum_temp <- wvs_pvalue_sum %>%
+    subset(iso3c == c)
+  wvs_temp <- wvs_pvalue %>%
+    subset(iso3c == c & !is.na(income_lohi))
+
+  # custom titles for each plot
+  gtitle <- countrycode(c, "iso3c", "country.name", custom_match = c("AND" = "Andorra"))
+  
+
+
+  plot_temp <- ggplot() +
+           geom_point(data = subset(wvs_temp, !is.na(income_lohi)),  aes(x = income_lohi, y = happy), color = "grey", position = jitter) +
+           geom_point(data = wvs_pvalue_sum_temp, aes(x = income_lohi, y = happy), size = 2.5) +
+           geom_errorbar(data = wvs_pvalue_sum_temp, aes(ymin = happy - happy_se, ymax = happy + happy_se, x = income_lohi), width = .15) +
+           scale_y_continuous(breaks = c(1,2,3,4), 
+                        labels = c("1" = "Not at all\nhappy",
+                                                     "2" = "Not very\nhappy",
+                                                     "3" = "Quite\nhappy",
+                                                     "4" = "Very\nhappy"),
+                        limits = c(2,4)) +
+           annotate("text", x = 1.5, y = mean(wvs_pvalue_sum_temp$happy), label = paste0("p = ", sprintf('%.3f', t.test(wvs_temp$happy[wvs_temp$income == 1], y=wvs_temp$happy[wvs_temp$income == 3])$p.value))) + # t-test here to extract p-value
+           labs(x = "Income Group", y = " ", title = paste0(gtitle, " (", c, ")")) + 
+           theme_classic()
+
+agg_png(here::here("results", "means_p", paste0(c,"_tplot.png")), height = 700, width = 500, res = 144)
+print(plot_temp)
+dev.off()
+}
+```
+
+A figure for each country can be found in the folder [results](.../results). Here we plot Germany and Ethiopia, respective examples of a significant difference (p<0.05) and a not significant difference (p>=0.05).
+```{r deu}
+knitr::include_graphics(c(here::here("results", "means_p", "DEU_tplot.png"), here::here("results", "means_p", "ETH_tplot.png")))
+```
+
