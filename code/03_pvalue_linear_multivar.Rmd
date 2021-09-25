@@ -48,7 +48,7 @@ Multivariate regression is one of the most common quantitative methods used to s
 knitr::include_graphics(here::here("results", "linear_p", "DEU_linear.png"))
 ```
 
-But then adjust the values of subjective well-being for an association with education (or other variables). First lets simply look at the education and well-being linear association. Note that ISCED is not intended as a linear measure, but will will use it that way for now just for the purposes of example (and we removed 9 for 'other').
+But then adjust the values of subjective well-being for an association with education (or other variables). First lets simply look at the education and well-being linear association. Note that ISCED is not intended as a linear measure, but we will use it that way for now just for the purposes of example (and we removed 9 for 'other').
 
 ```{r edcorr}
 set.seed(90210)
@@ -178,7 +178,11 @@ m1 <- lm(subj_well_being ~ income8f, data = subset(wvs_pvalue, iso3c == "DEU"))
 m2 <- lm(subj_well_being ~ income8f + educ_isced11f, data = subset(wvs_pvalue, iso3c == "DEU"))
 m3 <- lm(subj_well_being ~ income8f + educ_isced11f + god_importancef, data = subset(wvs_pvalue, iso3c == "DEU"))
 
-export_summs(m1, m2, m3)
+export_summs(m1, m2, m3, coefs = c(
+  "Income" = "income8f",
+  "Education" = "educ_isced11f",
+  "God Importance" = "god_importancef"
+))
 ```
 Now Ethiopia
 
@@ -188,7 +192,11 @@ m1 <- lm(subj_well_being ~ income8f, data = subset(wvs_pvalue, iso3c == "ETH"))
 m2 <- lm(subj_well_being ~ income8f + educ_isced11f, data = subset(wvs_pvalue, iso3c == "ETH"))
 m3 <- lm(subj_well_being ~ income8f + educ_isced11f + god_importancef, data = subset(wvs_pvalue, iso3c == "ETH"))
 
-export_summs(m1, m2, m3)
+export_summs(m1, m2, m3, coefs = c(
+  "Income" = "income8f",
+  "Education" = "educ_isced11f",
+  "God Importance" = "god_importancef"
+))
 ```
 
 Now Vietnam
@@ -200,5 +208,9 @@ m1 <- lm(subj_well_being ~ income8f, data = subset(wvs_pvalue, iso3c == "VNM"))
 m2 <- lm(subj_well_being ~ income8f + educ_isced11f, data = subset(wvs_pvalue, iso3c == "VNM"))
 m3 <- lm(subj_well_being ~ income8f + educ_isced11f + god_importancef, data = subset(wvs_pvalue, iso3c == "VNM"))
 
-export_summs(m1, m2, m3)
+export_summs(m1, m2, m3, coefs = c(
+  "Income" = "income8f",
+  "Education" = "educ_isced11f",
+  "God Importance" = "god_importancef"
+))
 ```
