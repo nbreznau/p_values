@@ -1,0 +1,102 @@
+---
+title: "Bayes instead of t-test"
+author: "Nate Breznau"
+date: "11/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load('tidyverse',
+               'BEST', #the package by Kruschke
+               'ggplot2',
+               'ragg',
+               'countrycode',
+               'ggpubr',
+               'jtools')
+
+options(scipen = 999)
+```
+
+
+### Comaparing Means
+
+In experimental research - more often psychology and economics, the p-value is often the statistic used to determine if the average outcome in the **treatment** group is different from the **control** group. But this can also be used to determine differences in means between any groups - whether they were part of an experiement or just social groups that exist in a given population. In this case the p-value gives the same information as a t-test.
+
+Bayesian estimation can offer a more flexible approach to mean compartison. One that, "reveals the relative credibility of every possible difference of means, every possible difference of standard deviations, and all possible effect sizes. From this explicit distribution of credible parameter values, inferences about null values can be made without ever referring to p values as
+in null hypothesis significance testing (NHST). Unlike NHST, the Bayesian method can accept the null value, not only reject it, when certainty in the estimate is high." (Kruschke 2013:1).
+
+Let us compare happiness for individuals that are highest in income in their society with those who are lowest in income to test the hypothesis that *money can buy happiness*, but this time using Bayesian group comparison. 
+
+##### Load data
+
+These World Values Survey data were imported using the script [WVS_import.R](.../prep/WVS_import.R) found in the "prep" folder of this project. Fourteen variables were selected to keep things simple. 
+
+```{r data, message = F, warning = F}
+wvs_pvalue <- read_rds(here::here("data","wvs_pvalue.rds"))
+```
+
+#### T-Test (from 01_pvalue_means.Rmd)
+
+#### Happiness and Income T-Test (P-Value)
+
+Start with a t-test. This will compare the means in two income groups. Let's look only at Germany If we use the enitre WVS data there are over 70 thousand cases and this will inevitably lead to tiny standard errors. (Switzerland is not in the Wave 7 data unfortunately)
+
+```{r prepp, message = F, warning = F}
+wvs_pvalue <- as.data.frame(wvs_pvalue) %>%
+  mutate(income_lohi = ifelse(income == 1, "Low", ifelse(income == 3, "High", NA)), # only low and high incomes
+         happy = ifelse(happiness > 0, happiness, NA), # remove missing
+         happy = car::recode(happy, "1=4;2=3;3=2;4=1")) # make happiest people with higher scores
+
+# select only Germany (= DEU in iso3c language)
+wvs_pvalueDEU <- wvs_pvalue %>%
+  subset(iso3c == "DEU" & !is.na(happy)) 
+
+
+  
+
+# t-test
+t.test(wvs_pvalueDEU$happy[wvs_pvalueDEU$income == 1], y = wvs_pvalueDEU$happy[wvs_pvalueDEU$income == 3])
+
+```
+
+#### Run Bayes Group Comparison
+
+```{r best_groups}
+b1 <- BESTmcmc(wvs_pvalueDEU$happy[wvs_pvalueDEU$income == 1], wvs_pvalueDEU$happy[wvs_pvalueDEU$income == 3], parallel = F)
+```
+
+```{r best_out}
+summary(b1)
+
+```
+
+
+```{r best_plot_means}
+plot(b1)
+```
+```{r plot_sds}
+plot(b1, "sd")
+```
+
+```{r plot_post}
+plotPostPred(b1)
+```
+Use informative priors where we pretend we have reason to believe that the group means are actually 1.2 and 3.9 and SD 0.1 in both. How does this impact our posterior distribution?
+
+```{r priors}
+b2 <- BESTmcmc(wvs_pvalueDEU$happy[wvs_pvalueDEU$income == 1], wvs_pvalueDEU$happy[wvs_pvalueDEU$income == 3], prior = list(muM = c(1.2,3.9),
+                                                             muSD = c(0.1,0.1)), parallel = F)
+```
+
+```{r prior_sum}
+summary(b2)
+```
+```{r plot1b2}
+plot(b2)
+```
+
+```{r plotb2}
+plotPostPred(b2)
+```
+
