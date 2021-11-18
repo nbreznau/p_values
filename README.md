@@ -1,4 +1,4 @@
-# P-Values Three Ways - An Interactive Lecture
+# P-Values Three-by-Two Ways - An Interactive Lecture
 
 Nate Breznau, University of Bremen
 
