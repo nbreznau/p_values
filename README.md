@@ -1,15 +1,12 @@
-# P-Values Three Ways - An Interactive Lecture
+## P-Values Three Ways - An Interactive Lecture
 
 Nate Breznau, University of Bremen
 
 breznau.nate@gmail.com
 
-First implemented for the course 
-**Open Science in Social Sciences: Crises, Controversies and Change**
+### Abstract
 
-University of Zurich, Bachelor of Arts Blockseminar
-
-[Syllabus](https://docs.google.com/document/d/1bQV3YOMsmNqA9CT1SyiTqspGuNHWZw-jZxXoeT2FcvU/)
+This is an open science teaching materials page. Given that the open science movement is partially driven by the need to address questionable research practices (QRPs), and that QRPs have much to do with p-values, I argue that teaching for a *better* understanding of p-values should be a part of any open science or methods course. 
 
 ### Data
 
